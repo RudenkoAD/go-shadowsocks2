@@ -16,6 +16,7 @@ GoDoc at https://godoc.org/github.com/shadowsocks/go-shadowsocks2/
 - [x] TCP tunneling (e.g. benchmark with iperf3)
 - [x] SIP003 plugins
 - [x] Replay attack mitigation
+- [x] Tunnel mode (relay between two SS endpoints, TCP only)
 
 
 ## Install
@@ -53,6 +54,18 @@ go-shadowsocks2 -c 'ss://AEAD_CHACHA20_POLY1305:your-password@[server_address]:8
 ```
 
 Replace `[server_address]` with the server's public address.
+
+
+### Tunnel
+
+Tunnel mode relays between two Shadowsocks endpoints: it accepts traffic encrypted with one config (host), deciphers it, re-encrypts with another config (destination), and forwards to the destination server. Use `-t-host` and `-t-dest` with two `ss://` URLs (or address and cipher/password). Tunnel mode is TCP only.
+
+```sh
+go-shadowsocks2 -t-host 'ss://AEAD_CHACHA20_POLY1305:host-pass@:8488' \
+  -t-dest 'ss://AEAD_CHACHA20_POLY1305:dest-pass@next:8489' -verbose
+```
+
+Clients connect to the host address (`:8488`); the process forwards each connection to the next-hop server at `next:8489` after re-encrypting with the destination cipher.
 
 
 ## Advanced Usage

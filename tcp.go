@@ -142,6 +142,61 @@ func tcpRemote(addr string, shadow func(net.Conn) net.Conn) {
 	}
 }
 
+// tcpTunnel listens on hostAddr, deciphers with hostShadow, and forwards to destAddr
+// after re-encrypting with destShadow (tunnel mode: relay between two SS endpoints).
+func tcpTunnel(hostAddr string, hostShadow func(net.Conn) net.Conn, destAddr string, destShadow func(net.Conn) net.Conn) {
+	l, err := net.Listen("tcp", hostAddr)
+	if err != nil {
+		logf("failed to listen on %s: %v", hostAddr, err)
+		return
+	}
+
+	logf("tunnel TCP on %s -> %s", hostAddr, destAddr)
+	for {
+		c, err := l.Accept()
+		if err != nil {
+			logf("failed to accept: %v", err)
+			continue
+		}
+
+		go func() {
+			defer c.Close()
+			if config.TCPCork {
+				c = timedCork(c, 10*time.Millisecond, 1280)
+			}
+			sc := hostShadow(c)
+
+			tgt, err := socks.ReadAddr(sc)
+			if err != nil {
+				logf("failed to get target address from %v: %v", c.RemoteAddr(), err)
+				_, _ = io.Copy(ioutil.Discard, sc)
+				return
+			}
+
+			rc, err := net.Dial("tcp", destAddr)
+			if err != nil {
+				logf("failed to connect to destination %v: %v", destAddr, err)
+				return
+			}
+			defer rc.Close()
+			if config.TCPCork {
+				rc = timedCork(rc, 10*time.Millisecond, 1280)
+			}
+			rc = destShadow(rc)
+
+			if _, err = rc.Write(tgt); err != nil {
+				logf("failed to send target address: %v", err)
+				return
+			}
+
+			logf("tunnel %s <-> %s <-> %s", c.RemoteAddr(), destAddr, tgt)
+			if err = relay(sc, rc); err != nil {
+				logf("relay error: %v", err)
+			}
+		}()
+	}
+}
+
 // relay copies between left and right bidirectionally
 func relay(left, right net.Conn) error {
 	var err, err1 error

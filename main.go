@@ -29,6 +29,8 @@ func main() {
 	var flags struct {
 		Client     string
 		Server     string
+		THost      string
+		TDest      string
 		Cipher     string
 		Key        string
 		Password   string
@@ -52,6 +54,8 @@ func main() {
 	flag.StringVar(&flags.Password, "password", "", "password")
 	flag.StringVar(&flags.Server, "s", "", "server listen address or url")
 	flag.StringVar(&flags.Client, "c", "", "client connect address or url")
+	flag.StringVar(&flags.THost, "t-host", "", "tunnel mode: host listen address or url (decipher incoming)")
+	flag.StringVar(&flags.TDest, "t-dest", "", "tunnel mode: destination address or url (cipher outgoing)")
 	flag.StringVar(&flags.Socks, "socks", "", "(client-only) SOCKS listen address")
 	flag.BoolVar(&flags.UDPSocks, "u", false, "(client-only) Enable UDP support for SOCKS")
 	flag.StringVar(&flags.RedirTCP, "redir", "", "(client-only) redirect TCP from this address")
@@ -73,9 +77,13 @@ func main() {
 		return
 	}
 
-	if flags.Client == "" && flags.Server == "" {
+	tunnelMode := flags.THost != "" || flags.TDest != ""
+	if flags.Client == "" && flags.Server == "" && !tunnelMode {
 		flag.Usage()
 		return
+	}
+	if tunnelMode && (flags.THost == "" || flags.TDest == "") {
+		log.Fatal("tunnel mode requires both -t-host and -t-dest")
 	}
 
 	var key []byte
@@ -87,7 +95,46 @@ func main() {
 		key = k
 	}
 
-	if flags.Client != "" { // client mode
+	if tunnelMode { // tunnel mode: relay between two SS endpoints
+		hostAddr := flags.THost
+		hostCipher := flags.Cipher
+		hostPassword := flags.Password
+		if hostPassword == "" {
+			hostPassword = os.Getenv("SS_PASSWORD")
+		}
+		if strings.HasPrefix(hostAddr, "ss://") {
+			var err error
+			hostAddr, hostCipher, hostPassword, err = parseURL(hostAddr)
+			if err != nil {
+				log.Fatal(err)
+			}
+		}
+
+		destAddr := flags.TDest
+		destCipher := flags.Cipher
+		destPassword := flags.Password
+		if destPassword == "" {
+			destPassword = os.Getenv("SS_PASSWORD")
+		}
+		if strings.HasPrefix(destAddr, "ss://") {
+			var err error
+			destAddr, destCipher, destPassword, err = parseURL(destAddr)
+			if err != nil {
+				log.Fatal(err)
+			}
+		}
+
+		hostCiph, err := core.PickCipher(hostCipher, key, hostPassword)
+		if err != nil {
+			log.Fatal(err)
+		}
+		destCiph, err := core.PickCipher(destCipher, key, destPassword)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		go tcpTunnel(hostAddr, hostCiph.StreamConn, destAddr, destCiph.StreamConn)
+	} else if flags.Client != "" { // client mode
 		addr := flags.Client
 		cipher := flags.Cipher
 		password := flags.Password

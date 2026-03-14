@@ -2,9 +2,7 @@
 
 A fresh implementation of Shadowsocks in Go.
 
-GoDoc at https://godoc.org/github.com/shadowsocks/go-shadowsocks2/
-
-![Build and test](https://github.com/shadowsocks/go-shadowsocks2/workflows/Build%20and%20test/badge.svg)
+GoDoc at https://pkg.go.dev/github.com/RudenkoAD/go-shadowsocks2
 
 
 ## Features
@@ -21,12 +19,10 @@ GoDoc at https://godoc.org/github.com/shadowsocks/go-shadowsocks2/
 
 ## Install
 
-Pre-built binaries for common platforms are available at https://github.com/shadowsocks/go-shadowsocks2/releases
-
-Install from source
+Install from source (requires Go 1.21+)
 
 ```sh
-go install -u github.com/shadowsocks/go-shadowsocks2@latest
+go install github.com/RudenkoAD/go-shadowsocks2@latest
 ```
 
 
